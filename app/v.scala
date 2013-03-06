@@ -29,7 +29,7 @@ object V {
     def maxLength(l: Int) = validateWith[String]("validation.maxLength"){_.size < l}
 
     def text: FormMapping[String] = _.success
-    def int: FormMapping[Int] = isInt(_).map(Integer.parseInt)
+    def int(x: String) = isInt(x).map(Integer.parseInt)
   }
 
   implicit def mappingSemigroup[From, To]: Semigroup[Mapping[From, To]] = semigroup { (m1, m2) =>
@@ -61,14 +61,14 @@ object V {
     type VA[A] = ValidationNEL[String, A]
     val agek = kleisli[VA, String, Int](int) >=> (min(18) |+| max(120) |+| positive)
 
-    // Using Monads
+    // Composition using Monads
     val age = int(_: String) >>= min(18) |+| max(120) |+| positive
     val name = text(_: String) >>= notEmptyText |+| minLength(3)
 
     val mock = Map(
       "firstname" -> Seq("Julien"),
       "lastname" -> Seq("Tournay"),
-      "age" -> Seq("12"))
+      "age" -> Seq("27"))
 
     val f = field(mock) // should be part of play, working an implicit Request[...]
 
@@ -80,29 +80,27 @@ object V {
       (f("lastname") >>= name) |@|
       (f("age") >>= age)
 
-    init[String] ~> "firstname"
-
     val user = validateUser(User.apply)
 
-    println("== user ==")
-    println(user)
+    implicit val userEq = equalA[User]
+    implicit val userSh = showA[User]
 
-    println("== v1 ==")
-    println(agek("27"))
-    println(agek("17"))
-    println(agek("160"))
-    println(agek("-1"))
+    user assert_=== User("Julien", "Tournay", 27).successNel[String]
+    agek("27") assert_=== 27.success
+    agek("17") assert_=== "validation.min".failNel[Int]
+    agek("160") assert_=== "validation.max".failNel[Int]
+    agek("-1") assert_=== nel("validation.min", "validation.positive").fail[Int]
 
-    println("== v2 ==")
-    println(age("27"))
-    println(age("17"))
-    println(age("160"))
-    println(age("-1"))
+    age("27") assert_=== 27.success
+    age("17") assert_=== "validation.min".failNel[Int]
+    age("160") assert_=== "validation.max".failNel[Int]
+    age("-1") assert_=== nel("validation.min", "validation.positive").fail[Int]
 
-    println("== name2 ==")
-    println(name("toto"))
-    println(name(""))
-    println(name("ss"))
+    name("toto") assert_=== "toto".success
+    name("") assert_=== nel("validation.notemptytext", "validation.minLength").fail[String]
+    name("ss") assert_=== "validation.minLength".failNel[String]
+
+    println("YEAH!")
   }
 
 
