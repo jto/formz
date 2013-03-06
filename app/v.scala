@@ -11,27 +11,22 @@ object V {
   type Constraint[T] = Mapping[T, T]
 
   object Constraints {
-    //def field(name: String): Mapping[Map[String, Seq[String]], String] = data =>
-    //  data.get(name).map(_.head).toSuccess[String]("required").liftFailNel
+
+    def validateWith[From](msg: String)(pred: From => Boolean): Constraint[From] =
+      v => validation(!pred(v) either nel(msg) or v)
+
     def field(data: Map[String, Seq[String]]): Mapping[String, String] = name =>
-      data.get(name).map(_.head).toSuccess[String]("required").liftFailNel
-    def isInt: Constraint[String] = v =>
-      validation(!v.matches("-?[0-9]+") either nel("not an Int") or v)
-    def min(m: Int): Constraint[Int] = v =>
-      validation(!(v > m) either nel("MIN") or v)
-    def max(m: Int): Constraint[Int] = v =>
-      validation(!(v < m) either nel("MAX") or v)
-    def positive: Constraint[Int] = v =>
-      validation(!(v >= 0) either nel("positive") or v)
-    def notEmpty[A]: Constraint[Seq[A]] = vs =>
-      validation(vs.isEmpty either nel("expected an non empty collection") or vs)
-    def notEmptyText: Constraint[String] =
-      notEmpty[Char](_).map(_.mkString)
+      data.get(name).map(_.head).toSuccess[String]("validation.required").liftFailNel
+
+    def isInt = validateWith[String]("validation.int"){_.matches("-?[0-9]+")}
+    def min(m: Int) = validateWith[Int]("validation.min"){_ > m}
+    def max(m: Int) = validateWith[Int]("validation.max"){_ < m}
+    def positive = validateWith[Int]("validation.positive"){_ >= 0}
+    def notEmpty[A] = validateWith[Seq[A]]("validation.notempty"){!_.isEmpty}
+    def notEmptyText = validateWith[String]("validation.notemptytext"){!_.isEmpty}
     // Probably possible tu use Seq[Char] instead of String
-    def minLength[A](l: Int): Constraint[String] = vs =>
-      validation(!(vs.size >= l) either nel("min length") or vs)
-    def maxLength[A](l: Int): Constraint[String] = vs =>
-      validation(!(vs.size < l) either nel("max length") or vs)
+    def minLength(l: Int) = validateWith[String]("validation.minLength"){_.size >= l}
+    def maxLength(l: Int) = validateWith[String]("validation.maxLength"){_.size < l}
 
     def text: FormMapping[String] = _.success
     def int: FormMapping[Int] = isInt(_).map(Integer.parseInt)
@@ -78,12 +73,14 @@ object V {
     val f = field(mock) // should be part of play, working an implicit Request[...]
 
     // extractor, we could easily write something equivalent for Json by defining
-    //`def path(json: JsObject): Mapping[JsPath, String] = path => ...`
+    // `def path(json: JsObject): Mapping[JsPath, String] = path => ...`
 
     val validateUser =
       (f("firstname") >>= name) |@|
       (f("lastname") >>= name) |@|
       (f("age") >>= age)
+
+    init[String] ~> "firstname"
 
     val user = validateUser(User.apply)
 
