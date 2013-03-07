@@ -60,14 +60,14 @@ object V {
     def text(path: JsPath, c: Constraint[String]) = (data: JsValue) =>
       validate[JsPath, JsValue, String](fromJson(data)){
         case JsString(s) => s.successNel
-        case j => s"Expected JsString found $j".failNel
+        case j => "validation.string".failNel
       }(path, c)
 
 
     def int(path: JsPath, c: Constraint[Int]) = (data: JsValue) =>
       validate[JsPath, JsValue, Int](fromJson(data)){
         case JsNumber(n) if (n.scale <= 0) => n.intValue.successNel
-        case j => s"Expected JsString found $j".failNel
+        case j => "validation.int".failNel
     }(path, c)
   }
 
@@ -116,7 +116,7 @@ object V {
     val mock = Json.obj(
       "firstname" -> "Julien",
       "lastname" -> "Tournay",
-      "age" -> 27)
+      "age" -> 27.3)
 
     val validateUser =
       text(__ \ "firstname", name)(mock) |@|
