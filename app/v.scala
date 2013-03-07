@@ -108,6 +108,13 @@ object Examples {
       text("lastname", name)(mock) |@|
       int("age", age)(mock)
 
+    // It could also be written like this (IMO better):
+    //  val validateUser =
+    //    (text("firstname") >>= name)(mock) |@|
+    //    (text("lastname") >>=  name)(mock) |@|
+    //    (int("age") >>= age)(mock)
+    // But importing Validation.Monad._ causes a scope issue (the implicit the Applicative[Validation] is shadowed by Applicative[MA] which does not accumulate errors)
+
     val user = validateUser.tupled
 
     user assert_=== ("Julien", "Tournay", 27).success[NonEmptyList[(String, NonEmptyList[String])]]
@@ -136,17 +143,3 @@ object Examples {
     println("Success!")
   }
 }
-
-/*
-// Scala console test session
-import scalaz._; import Scalaz._; import form.V._; import Constraints._; import MapValidation._
-val mock = Map(
-  "firstname" -> Seq("Julien"),
-  "lastname" -> Seq("Tournay"),
-  "age" -> Seq("27"))
-val age = min(18) |+| max(120) |+| positive
-val name = notEmptyText |+| minLength(3)
-val v1 = text("firstname", name)
-val v2 = text("lastname", name)
-val v3 = int("age", age)
-*/
