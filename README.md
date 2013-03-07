@@ -1,0 +1,57 @@
+# Form / Validation API re-design proposal
+
+## Motivations
+
+There's currently a lot of redundancy in Play concerning data validation. We have a validation API for Forms, a validation API for Json, and one more validation API in Anorm (as Anorm validates the resuls returned by the DB).
+
+This is an attempt to solve this issue by providing an validation API working for different data types, and easy to extend.
+
+## Concepts
+
+The basics of it are pretty simple.
+
+Validating data basically means you have to do X steps:
+
+1 - Extract "pieces" of data from a "blob" (a blob being an Http request, a scala Map, a jdbc ResultSet, a Json object etc.)
+2 - validate formats and convert each "pieces" in Scala types ("17" => 17:Int, JsNumber(17) => 17 ...)
+3 - Apply validation rules (business logic here), for example age must not be < 0.
+
+At first, theses steps seems to be very different, they are in fact specialization of `(Input => Either[Error, Result])`
+Let's take the example of validating an Int contained in a request body
+
+1 - Extraction is `Request => Either[Errors, String]`
+2 - Format validation is `String => Either[Errors, Int]`
+3 - "Business" validation is `Int => Either[Errors, Int]`
+
+This POC does uses Validation instead of Either, but the general idea is the same
+
+``` scala
+type Mapping[Err, From, To] = (From => ValidationNEL[Err, To]) // Steps 1 and 2
+type Constraint[T] = Mapping[String, T, T]                     // Step 3
+```
+
+There's a strong separation between "Business" logic (`Constraint`) and Extraction / Format logic.
+Thanks to that, every predefined `Constraint` can be used on *any* data source.
+
+It's also fairly easy to add support for a new data source by writing a bunch of `Mapping`.
+
+## Writing `Constraint`
+
+Since constraint are just pure functions, it's really easy to write a one from scratch (and even easier using a provided helper ).
+
+```scala
+def min(m: Int) = validateWith("validation.min"){(_: Int) > m}
+```
+
+It's also possible to write new `Constraint` by composition (since Constraints are Monoids).
+Note that all all validation will be applied, and all errors kept.
+
+```scala
+ val age = min(1) |+| max(120)
+```
+
+I don't know if a final implementation should rely on scalaz. I think it can, but scalaz typeclasse and operators should be hidden to most users. It's certainly useful to have it internally, and probably to let users play with it if they want to by adding a special import like `import play.api.typeclasses._`
+
+Feedbacks are welcome :)
+
+jto.
