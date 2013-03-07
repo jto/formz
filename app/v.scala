@@ -3,7 +3,7 @@ package form
 import scalaz._
 import Scalaz._
 
-object V {
+object Api {
 
   type Mapping[Err, From, To] = (From => ValidationNEL[Err, To])
   type Constraint[T] = Mapping[String, T, T]
@@ -71,13 +71,32 @@ object V {
     }(path, c)
   }
 
+}
+
+
+object Examples {
+
+  import Api._
+  import Constraints._
+
+  val age = min(18) |+| max(120) |+| positive
+  val name = notEmptyText |+| minLength(3)
+
+  def testConstraints = {
+    age(27) assert_=== 27.success
+    age(17) assert_=== "validation.min".failNel[Int]
+    age(160) assert_=== "validation.max".failNel[Int]
+    age(-1) assert_=== nel("validation.min", "validation.positive").fail[Int]
+
+    name("toto") assert_=== "toto".success
+    name("") assert_=== nel("validation.notemptytext", "validation.minLength").fail[String]
+    name("ss") assert_=== "validation.minLength".failNel[String]
+
+    println("Success!")
+  }
+
   def validateMap = {
-
-    import Constraints._
     import MapValidation._
-
-    val age = min(18) |+| max(120) |+| positive
-    val name = notEmptyText |+| minLength(3)
 
     val mock = Map(
       "firstname" -> Seq("Julien"),
@@ -93,30 +112,17 @@ object V {
 
     user assert_=== ("Julien", "Tournay", 27).success[NonEmptyList[(String, NonEmptyList[String])]]
 
-    age(27) assert_=== 27.success
-    age(17) assert_=== "validation.min".failNel[Int]
-    age(160) assert_=== "validation.max".failNel[Int]
-    age(-1) assert_=== nel("validation.min", "validation.positive").fail[Int]
-
-    name("toto") assert_=== "toto".success
-    name("") assert_=== nel("validation.notemptytext", "validation.minLength").fail[String]
-    name("ss") assert_=== "validation.minLength".failNel[String]
-
-    println("YEAH!")
+    println("Success!")
   }
 
   def validateJson = {
     import play.api.libs.json._
-    import Constraints._
     import JsonValidation._
-
-    val age = min(18) |+| max(120) |+| positive
-    val name = notEmptyText |+| minLength(3)
 
     val mock = Json.obj(
       "firstname" -> "Julien",
       "lastname" -> "Tournay",
-      "age" -> 27.3)
+      "age" -> 27)
 
     val validateUser =
       text(__ \ "firstname", name)(mock) |@|
@@ -127,18 +133,8 @@ object V {
 
     user assert_=== ("Julien", "Tournay", 27).success[NonEmptyList[(JsPath, NonEmptyList[String])]]
 
-    age(27) assert_=== 27.success
-    age(17) assert_=== "validation.min".failNel[Int]
-    age(160) assert_=== "validation.max".failNel[Int]
-    age(-1) assert_=== nel("validation.min", "validation.positive").fail[Int]
-
-    name("toto") assert_=== "toto".success
-    name("") assert_=== nel("validation.notemptytext", "validation.minLength").fail[String]
-    name("ss") assert_=== "validation.minLength".failNel[String]
-
-    println("YEAH!")
+    println("Success!")
   }
-
 }
 
 /*
