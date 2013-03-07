@@ -42,10 +42,10 @@ object Api {
       data.get(name).map(_.head).toSuccess("validation.required").liftFailNel
 
     def text(name: String, c: Constraint[String]) = (data: M) =>
-      validate[String, String, String](fromMap(data))(_.success)(name, c)
+      validate(fromMap(data))(_.success)(name, c)
 
     def int(name: String, c: Constraint[Int]) = (data: M) =>
-      validate[String, String, Int](fromMap(data)) { x: String => isInt(x).map(Integer.parseInt)}(name, c)
+      validate(fromMap(data)) { x: String => isInt(x).map(Integer.parseInt)}(name, c)
   }
 
   object JsonValidation {
@@ -58,17 +58,17 @@ object Api {
       path(data).headOption.toSuccess("validation.required").liftFailNel
 
     def text(path: JsPath, c: Constraint[String]) = (data: JsValue) =>
-      validate[JsPath, JsValue, String](fromJson(data)){
+      validate(fromJson(data)){
         case JsString(s) => s.successNel
         case j => "validation.string".failNel
       }(path, c)
 
 
     def int(path: JsPath, c: Constraint[Int]) = (data: JsValue) =>
-      validate[JsPath, JsValue, Int](fromJson(data)){
+      validate(fromJson(data)){
         case JsNumber(n) if (n.scale <= 0) => n.intValue.successNel
         case j => "validation.int".failNel
-    }(path, c)
+      }(path, c)
   }
 
 }
@@ -103,19 +103,21 @@ object Examples {
       "lastname" -> Seq("Tournay"),
       "age" -> Seq("27"))
 
-    val validateUser =
-      text("firstname", name)(mock) |@|
-      text("lastname", name)(mock) |@|
-      int("age", age)(mock)
-
     // It could also be written like this (IMO better):
-    //  val validateUser =
-    //    (text("firstname") >>= name)(mock) |@|
-    //    (text("lastname") >>=  name)(mock) |@|
-    //    (int("age") >>= age)(mock)
+    // val userValidation = for {
+    //    fn <-  text("firstname") >>= name;
+    //    ln <-  text("lastname") >>= name;
+    //    a  <-  int("age") >>= age
+    //  } yield (fn |@| ln |@| a)
     // But importing Validation.Monad._ causes a scope issue (the implicit the Applicative[Validation] is shadowed by Applicative[MA] which does not accumulate errors)
 
-    val user = validateUser.tupled
+    val userValidation = for {
+      fn <-  text("firstname", name);
+      ln <-  text("lastname", name);
+      a  <-  int("age", age)
+    } yield (fn |@| ln |@| a)
+
+    val user = userValidation(mock).tupled
 
     user assert_=== ("Julien", "Tournay", 27).success[NonEmptyList[(String, NonEmptyList[String])]]
 
@@ -131,12 +133,13 @@ object Examples {
       "lastname" -> "Tournay",
       "age" -> 27)
 
-    val validateUser =
-      text(__ \ "firstname", name)(mock) |@|
-      text(__ \ "lastname", name)(mock) |@|
-      int(__ \ "age", age)(mock)
+    val userValidation = for {
+      fn <-  text(__ \ "firstname", name);
+      ln <-  text(__ \ "lastname", name);
+      a  <-  int(__ \ "age", age)
+    } yield (fn |@| ln |@| a)
 
-    val user = validateUser.tupled
+    val user = userValidation(mock).tupled
 
     user assert_=== ("Julien", "Tournay", 27).success[NonEmptyList[(JsPath, NonEmptyList[String])]]
 
