@@ -33,11 +33,29 @@ type Constraint[T] = Mapping[String, T, T]                     // Step 3
 There's a strong separation between "Business" logic (`Constraint`) and Extraction / Format logic.
 Thanks to that, every predefined `Constraint` can be used on *any* data source.
 
+Json validation and Map validation are almost identical and are using the same `Constraint`:
+
+```scala
+// Map Validation
+val userValidation = for {
+  fn <-  text("firstname", name);
+  ln <-  text("lastname", name);
+  a  <-  int("age", age)
+} yield (fn |@| ln |@| a)
+
+// Json validation
+val userValidation = for {
+  fn <-  text(__ \ "firstname", name);
+  ln <-  text(__ \ "lastname", name);
+  a  <-  int(__ \ "age", age)
+} yield (fn |@| ln |@| a)
+````
+
 It's also fairly easy to add support for a new data source by writing a bunch of `Mapping`.
 
 ## Writing `Constraint`
 
-Since constraint are just pure functions, it's really easy to write a one from scratch (and even easier using a provided helper ).
+Since constraints are just pure functions, it's really easy to write a one from scratch (and even easier using a provided helper ).
 
 ```scala
 def min(m: Int) = validateWith("validation.min"){(_: Int) > m}
