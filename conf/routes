@@ -15,5 +15,11 @@ GET     /contacts                   controllers.Contacts.form
 GET     /contacts/fakecontact       controllers.Contacts.editForm
 POST    /contacts                   controllers.Contacts.submit
 
+# Validation
+# Home page
+GET     /validation/map              controllers.Validation.map
+GET     /validation/json             controllers.Validation.json
+GET     /validation/complex          controllers.Validation.complex
+
 # Map static resources from the /public folder to the /assets URL path
 GET     /assets/*file               controllers.Assets.at(path="/public", file)
