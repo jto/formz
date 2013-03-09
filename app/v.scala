@@ -116,14 +116,6 @@ object Examples {
       "lastname" -> Seq("Tournay"),
       "age" -> Seq("27"))
 
-    // It could also be written like this (IMO better):
-    // val userValidation = for {
-    //    fn <-  text("firstname") >>= name;
-    //    ln <-  text("lastname") >>= name;
-    //    a  <-  int("age") >>= age
-    //  } yield (fn |@| ln |@| a)
-    // But importing Validation.Monad._ causes a scope issue (the implicit the Applicative[Validation] is shadowed by Applicative[MA] which does not accumulate errors)
-
     val userValidation = for {
       fn <-  text("firstname", name);
       ln <-  text("lastname", name);
@@ -185,9 +177,29 @@ object Examples {
       i <- withPrefix("informations", infoValidation)
     } yield (f |@| l |@| a |@| i)
 
-    val user = userValidation(mock).tupled
 
+    type VA[Key, To] = Validation[NonEmptyList[(Key, NonEmptyList[String])], To]
+
+    def same[Key, T:Equal](key: Key)(t: (T, T)): VA[Key, T] =
+      validation(!(t._1 === t._2) either nel(key -> nel("validation.eq")) or t._1)
+
+    val passwordValidation = for {
+      p <- text("password");
+      c <- text("confirm")
+    } yield {
+      import Validation.Monad._
+      (p <|*|> c) >>= same("pass and confirm")
+    }
+
+    val user = userValidation(mock).tupled
     user assert_=== ("Julien", "Tournay", 27, ("work", "jto@zenexity.com", "1234567890")).success[NonEmptyList[(String, NonEmptyList[String])]]
+
+    val pass = Map(
+      "password" -> Seq("secret"),
+      "confirm" -> Seq("secret"))
+
+    val password = passwordValidation(pass)
+    password assert_=== "secret".success[NonEmptyList[(String, NonEmptyList[String])]]
 
     "Success!"
   }
