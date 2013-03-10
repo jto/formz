@@ -28,6 +28,9 @@ object Api {
     def maxLength(l: Int) = validateWith("validation.maxLength"){(_: String).size < l}
     def pattern(regex: Regex) = validateWith("validation.pattern"){regex.unapplySeq(_: String).isDefined}
     def email = pattern("""\b[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\b""".r)(_: String).fail.map(_ => nel("validation.email")).validation
+    
+    def same[Key, T:Equal](key: Key)(t: (T, T)): VA[Key, T] =
+      validation(!(t._1 === t._2) either nel(key -> nel("validation.eq")) or t._1)
 
   }
 
@@ -184,9 +187,6 @@ object Examples {
       i <- withPrefix("informations", infoValidation)
     } yield (f |@| l |@| a |@| i)
 
-    def same[Key, T:Equal](key: Key)(t: (T, T)): VA[Key, T] =
-      validation(!(t._1 === t._2) either nel(key -> nel("validation.eq")) or t._1)
-
     val passwordValidation = for {
       p <- text("password");
       c <- text("confirm")
@@ -234,9 +234,6 @@ object Examples {
       a <- int(__ \ "age", age);
       i <- withPrefix(__ \ "informations", infoValidation)
     } yield (f |@| l |@| a |@| i)
-
-    def same[Key, T:Equal](key: Key)(t: (T, T)): VA[Key, T] =
-      validation(!(t._1 === t._2) either nel(key -> nel("validation.eq")) or t._1)
 
     val passwordValidation = for {
       p <- text(__ \ "password");
