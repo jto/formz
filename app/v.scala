@@ -7,6 +7,7 @@ object Api {
 
   type Mapping[Err, From, To] = (From => ValidationNEL[Err, To])
   type Constraint[T] = Mapping[String, T, T]
+  type VA[Key, To] = Validation[NonEmptyList[(Key, NonEmptyList[String])], To]
 
   object Constraints {
 
@@ -15,7 +16,6 @@ object Api {
     def validateWith[From](msg: String)(pred: From => Boolean): Constraint[From] =
       v => validation(!pred(v) either nel(msg) or v)
 
-
     def noConstraint[From]: Constraint[From] = _.success
     def isInt = validateWith("validation.int"){(_: String).matches("-?[0-9]+")}
     def min(m: Int) = validateWith("validation.min"){(_: Int) > m}
@@ -23,11 +23,12 @@ object Api {
     def positive = validateWith("validation.positive"){(_: Int) >= 0}
     def notEmpty[A] = validateWith("validation.notempty"){!(_:Seq[A]).isEmpty}
     def notEmptyText = validateWith("validation.notemptytext"){!(_: String).isEmpty}
-    // it's probably possible tu use Seq[Char] instead of String
+    // XXX: it's probably possible tu use Seq[Char] instead of String
     def minLength(l: Int) = validateWith("validation.minLength"){(_: String).size >= l}
     def maxLength(l: Int) = validateWith("validation.maxLength"){(_: String).size < l}
     def pattern(regex: Regex) = validateWith("validation.pattern"){regex.unapplySeq(_: String).isDefined}
     def email = pattern("""\b[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\b""".r)(_: String).fail.map(_ => nel("validation.email")).validation
+
   }
 
   implicit def mappingSemigroup[Err, From, To]: Semigroup[Mapping[Err, From, To]] = semigroup { (m1, m2) =>
@@ -47,7 +48,9 @@ object Api {
     def fromMap(data: M) = (name: String) =>
       data.get(name).map(_.head).toSuccess("validation.required").liftFailNel
 
-    def withPrefix[Key, To](prefix: String, v: M => Validation[NonEmptyList[(Key, NonEmptyList[String])], To]) = { (data: M) =>
+    // TODO: The general concept of Path (like in JsPath) can be generalized to any tree-ish structure.
+    // That includes Json, Files, nested Maps, etc.
+    def withPrefix[To](prefix: String, v: M => Validation[NonEmptyList[(String, NonEmptyList[String])], To]) = { (data: M) =>
       val  p = s"""$prefix."""
       val sub = data.filterKeys(_.startsWith(p)).map { case (k, v) =>
         k.substring(p.size) -> v
@@ -63,6 +66,7 @@ object Api {
   }
 
   object JsonValidation {
+    import Constraints._
     import play.api.libs.json._
 
     implicit def jspathEq = equalA[JsPath]
@@ -71,13 +75,16 @@ object Api {
     def fromJson(data: JsValue) = (path: JsPath) =>
       path(data).headOption.toSuccess("validation.required").liftFailNel
 
-    def text(path: JsPath, c: Constraint[String]) = (data: JsValue) =>
+    def withPrefix[To](prefix: JsPath, v: JsValue => Validation[NonEmptyList[(JsPath, NonEmptyList[String])], To]) =
+      (data: JsValue) => v(prefix(data).head)
+
+    def text(path: JsPath, c: Constraint[String] = noConstraint) = (data: JsValue) =>
       validate(fromJson(data)){
         case JsString(s) => s.successNel
         case j => "validation.string".failNel
       }(path, c)
 
-    def int(path: JsPath, c: Constraint[Int]) = (data: JsValue) =>
+    def int(path: JsPath, c: Constraint[Int] = noConstraint) = (data: JsValue) =>
       validate(fromJson(data)){
         case JsNumber(n) if (n.scale <= 0) => n.intValue.successNel
         case j => "validation.int".failNel
@@ -152,7 +159,7 @@ object Examples {
   }
 
 
-  def validateComplex = {
+  def validateComplexMap = {
 
     import MapValidation._
 
@@ -177,9 +184,6 @@ object Examples {
       i <- withPrefix("informations", infoValidation)
     } yield (f |@| l |@| a |@| i)
 
-
-    type VA[Key, To] = Validation[NonEmptyList[(Key, NonEmptyList[String])], To]
-
     def same[Key, T:Equal](key: Key)(t: (T, T)): VA[Key, T] =
       validation(!(t._1 === t._2) either nel(key -> nel("validation.eq")) or t._1)
 
@@ -188,7 +192,7 @@ object Examples {
       c <- text("confirm")
     } yield {
       import Validation.Monad._
-      (p <|*|> c) >>= same("pass and confirm")
+      (p <|*|> c) >>= same("pass")
     }
 
     val user = userValidation(mock).tupled
@@ -200,6 +204,57 @@ object Examples {
 
     val password = passwordValidation(pass)
     password assert_=== "secret".success[NonEmptyList[(String, NonEmptyList[String])]]
+
+    "Success!"
+  }
+
+  def validateComplexJson = {
+
+    import play.api.libs.json._
+    import JsonValidation._
+
+    val mock = Json.obj(
+      "firstname" -> "Julien",
+      "lastname" -> "Tournay",
+      "age" -> 27,
+      "informations" -> Json.obj(
+        "label" -> "work",
+        "email" -> "jto@zenexity.com",
+        "phones" -> "1234567890"))
+
+    val infoValidation = for {
+      l <-  text(__ \ "label");
+      e <-  text(__ \ "email", email);
+      p  <- text(__ \ "phones", pattern("""[0-9.+]+""".r))
+    } yield (l |@| e |@| p).tupled
+
+    val userValidation = for {
+      f <- text(__ \ "firstname", name);
+      l <- text(__ \ "lastname", name);
+      a <- int(__ \ "age", age);
+      i <- withPrefix(__ \ "informations", infoValidation)
+    } yield (f |@| l |@| a |@| i)
+
+    def same[Key, T:Equal](key: Key)(t: (T, T)): VA[Key, T] =
+      validation(!(t._1 === t._2) either nel(key -> nel("validation.eq")) or t._1)
+
+    val passwordValidation = for {
+      p <- text(__ \ "password");
+      c <- text(__ \ "confirm")
+    } yield {
+      import Validation.Monad._
+      (p <|*|> c) >>= same(__ \ "pass")
+    }
+
+    val user = userValidation(mock).tupled
+    user assert_=== ("Julien", "Tournay", 27, ("work", "jto@zenexity.com", "1234567890")).success[NonEmptyList[(JsPath, NonEmptyList[String])]]
+
+    val pass = Json.obj(
+      "password" -> "secret",
+      "confirm" -> "secret")
+
+    val password = passwordValidation(pass)
+    password assert_=== "secret".success[NonEmptyList[(JsPath, NonEmptyList[String])]]
 
     "Success!"
   }

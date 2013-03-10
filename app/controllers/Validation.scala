@@ -16,7 +16,7 @@ object Validation extends Controller {
   }
 
   def complex = Action {
-    Ok(Examples.validateComplex)
+    Ok(Examples.validateComplexMap + " " + Examples.validateComplexJson)
   }
 
 }
