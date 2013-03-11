@@ -18,6 +18,7 @@ POST    /contacts                   controllers.Contacts.submit
 # Validation
 # Home page
 GET     /validation/map              controllers.Validation.map
+GET     /validation/state            controllers.Validation.state
 GET     /validation/json             controllers.Validation.json
 GET     /validation/complex          controllers.Validation.complex
 

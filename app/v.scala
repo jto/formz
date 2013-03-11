@@ -118,6 +118,32 @@ object Examples {
     "Success!"
   }
 
+  def withState = {
+    import MapValidation._
+
+    type V[To] = ValidationNEL[String, To]
+
+    def text(name: String) = (data: M) => fromMap(data)(name)
+    def int(name: String) = (data: M) => {
+      import Validation.Monad._
+      fromMap(data)(name) >>= { x: String => isInt(x).map(Integer.parseInt) }
+    }
+
+    val mock = Map(
+      "firstname" -> Seq("Julien"),
+      "lastname" -> Seq("Tournay"),
+      "age" -> Seq("27"))
+
+    import Validation.Monad._
+    val v = init("firstname")
+      .map{ n =>
+        kleisli[V, M, String](text(n)) >=> name
+      }
+
+    println(user)
+    "Success!"
+  }
+
   def validateMap = {
     import MapValidation._
 
