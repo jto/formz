@@ -120,41 +120,23 @@ object Examples {
 
   def withState = {
     import MapValidation._
-
-    type V[To] = VA[String, To]
-
-    def validation[Key, From, To](f: From => ValidationNEL[String, To]) = { n: Key => source: From =>
-      f(source).fail.map(err => nel(n -> err)).validation
-    }
-
-    //def find(name: String) = (data: M) => fromMap(data)(name)
-    //def path(p: String) = kleisli[V, M, String](find(p))
-
-    def int = validation { source: String =>
-      isInt(source).map(Integer.parseInt)
-    }
-    def path(n: String) = validation { source: M =>
-      source.get(n).map(_.head).toSuccess("validation.required").liftFailNel
-    }(n)
-
+    
     val mock = Map(
-      "firstname" -> Seq("Julien"),
+      "firstname" -> Seq("Ju"),
       "lastname" -> Seq("Tournay"),
       "age" -> Seq("27"))
 
+    type V[To] = ValidationNEL[String, To]
+
     import Validation.Monad._
+    def path = (n: String) => (source: M) =>
+      source.get(n).map(_.head).toSuccess("validation.required").liftFailNel
+    
+    def key(n: String) = state[String => M => V[String], M => VA[String, String]]{ f => 
+      (f, f(n) >>> { (_: V[String]).fail.map(err => nel(n -> err)).validation })
+    }
 
-    val p = path("firstname")
-
-    val v = kleisli[V, M, String](path("firstname")) // >=> int //>=> age
-
-    val validated = p(mock)
-
-
-
-
-    // r[Source, Key, To](v: Key => Mapping[From, To]): Source => Validation[(Key, NonEmptyList[String]), To]
-    // Mapping[Err, From, To] => Key => Source => Validation[(Key, NonEmptyList[Err]), To]
+    val validated = (key("firdstname") ! path)(mock)
 
     //val userValidation = for {
     //  fn <- r(text("firstname") >=> name);
@@ -167,7 +149,6 @@ object Examples {
     //  ln <- r(text("lastname") >=> name;
     //  a  <- r(int("age") >=> age)
     //} yield (fn |@| ln |@| a)
-
 
     //
     //reads[JsValue](
