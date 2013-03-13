@@ -123,11 +123,9 @@ object Examples {
 
     type V[To] = ValidationNEL[String, To]
 
-    def text(name: String) = (data: M) => fromMap(data)(name)
-    def int(name: String) = (data: M) => {
-      import Validation.Monad._
-      fromMap(data)(name) >>= { x: String => isInt(x).map(Integer.parseInt) }
-    }
+    // has to be implemented for each source
+    def find(name: String) = (data: M) => fromMap(data)(name)
+    def int = isInt(_: String).map(Integer.parseInt)
 
     val mock = Map(
       "firstname" -> Seq("Julien"),
@@ -135,12 +133,24 @@ object Examples {
       "age" -> Seq("27"))
 
     import Validation.Monad._
-    val v = init("firstname")
-      .map{ n =>
-        kleisli[V, M, String](text(n)) >=> name
-      }
 
-    println(user)
+    def path(p: String) = kleisli[V, M, String](find(p))
+
+    val v = state{ key: String => (key, path(key) >=> int >=> age) }
+    val validated = v("age").map(_(mock))
+
+    //val userValidation = for {
+    //  fn <- path("firstname") >=> name;
+    //  ln <- path("lastname") >=> name;
+    //  a  <- path("age") >=> int >=> age
+    //} yield (fn |@| ln |@| a)
+    //
+    //validate[JsValue](
+    //  path("firstname") is name,
+    //  path("lastname") is name,
+    //  path("age") is int is age)(json)
+
+    println(validated)
     "Success!"
   }
 
