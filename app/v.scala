@@ -121,11 +121,21 @@ object Examples {
   def withState = {
     import MapValidation._
 
-    type V[To] = ValidationNEL[String, To]
+    type V[To] = VA[String, To]
 
-    // has to be implemented for each source
-    def find(name: String) = (data: M) => fromMap(data)(name)
-    def int = isInt(_: String).map(Integer.parseInt)
+    def validation[Key, From, To](f: From => ValidationNEL[String, To]) = { n: Key => source: From =>
+      f(source).fail.map(err => nel(n -> err)).validation
+    }
+
+    //def find(name: String) = (data: M) => fromMap(data)(name)
+    //def path(p: String) = kleisli[V, M, String](find(p))
+
+    def int = validation { source: String =>
+      isInt(source).map(Integer.parseInt)
+    }
+    def path(n: String) = validation { source: M =>
+      source.get(n).map(_.head).toSuccess("validation.required").liftFailNel
+    }(n)
 
     val mock = Map(
       "firstname" -> Seq("Julien"),
@@ -134,21 +144,36 @@ object Examples {
 
     import Validation.Monad._
 
-    def path(p: String) = kleisli[V, M, String](find(p))
+    val p = path("firstname")
 
-    val v = state{ key: String => (key, path(key) >=> int >=> age) }
-    val validated = v("age").map(_(mock))
+    val v = kleisli[V, M, String](path("firstname")) // >=> int //>=> age
+
+    val validated = p(mock)
+
+
+
+
+    // r[Source, Key, To](v: Key => Mapping[From, To]): Source => Validation[(Key, NonEmptyList[String]), To]
+    // Mapping[Err, From, To] => Key => Source => Validation[(Key, NonEmptyList[Err]), To]
 
     //val userValidation = for {
-    //  fn <- path("firstname") >=> name;
-    //  ln <- path("lastname") >=> name;
-    //  a  <- path("age") >=> int >=> age
+    //  fn <- r(text("firstname") >=> name);
+    //  ln <- r(text("lastname") >=> name);
+    //  a  <- r(int("age") >=> age)
     //} yield (fn |@| ln |@| a)
+
+    //val userValidation = for {
+    //  fn <- Reads.text("firstname").validating(name);
+    //  ln <- r(text("lastname") >=> name;
+    //  a  <- r(int("age") >=> age)
+    //} yield (fn |@| ln |@| a)
+
+
     //
-    //validate[JsValue](
-    //  path("firstname") is name,
-    //  path("lastname") is name,
-    //  path("age") is int is age)(json)
+    //reads[JsValue](
+    //  path("firstname") >=> name,
+    //  path("lastname") >=> name,
+    //  path("age") >=> int >=> age)
 
     println(validated)
     "Success!"
