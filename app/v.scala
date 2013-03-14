@@ -120,45 +120,54 @@ object Examples {
 
   def withState = {
     import MapValidation._
-    
+
     val mock = Map(
-      "firstname" -> Seq("Ju"),
+      "firstname" -> Seq("Julien"),
       "lastname" -> Seq("Tournay"),
       "age" -> Seq("27"))
 
     type V[To] = ValidationNEL[String, To]
 
     import Validation.Monad._
-    def path = (n: String) => (source: M) =>
+    val path = (n: String) => (source: M) =>
       source.get(n).map(_.head).toSuccess("validation.required").liftFailNel
-    
-    def key(n: String) = state[String => M => V[String], M => VA[String, String]]{ f => 
-      (f, f(n) >>> { (_: V[String]).fail.map(err => nel(n -> err)).validation })
+
+    val int = (x: String) => isInt(x).map(Integer.parseInt)
+
+    def key[To](n: String) = state[String => M => V[To], M => VA[String, To]]{ f =>
+      (f, f(n) >>> { (_: V[To]).fail.map(err => nel(n -> err)).validation })
     }
 
-    val validated = (key("firdstname") ! path)(mock)
+    def n(key: String) = kleisli[V, M, String](path(key)) >=> name
+    def a(key: String) = kleisli[V, M, String](path(key)) >=> int >=> age
 
-    //val userValidation = for {
-    //  fn <- r(text("firstname") >=> name);
-    //  ln <- r(text("lastname") >=> name);
-    //  a  <- r(int("age") >=> age)
-    //} yield (fn |@| ln |@| a)
+    val uv = for {
+      fn <- key[String]("firstname") ! n;
+      ln <- key[String]("lastname") ! n;
+      ag <- key[Int]("age") ! a
+    } yield (fn |@| ln |@| ag)
 
-    //val userValidation = for {
-    //  fn <- Reads.text("firstname").validating(name);
-    //  ln <- r(text("lastname") >=> name;
-    //  a  <- r(int("age") >=> age)
-    //} yield (fn |@| ln |@| a)
-
-    //
-    //reads[JsValue](
-    //  path("firstname") >=> name,
-    //  path("lastname") >=> name,
-    //  path("age") >=> int >=> age)
-
-    println(validated)
+    println(uv(mock))
     "Success!"
   }
+
+  //val userValidation = for {
+  //  fn <- r(text("firstname") >=> name);
+  //  ln <- r(text("lastname") >=> name);
+  //  a  <- r(int("age") >=> age)
+  //} yield (fn |@| ln |@| a)
+
+  //val userValidation = for {
+  //  fn <- Reads.text("firstname").validating(name);
+  //  ln <- r(text("lastname") >=> name;
+  //  a  <- r(int("age") >=> age)
+  //} yield (fn |@| ln |@| a)
+
+  //
+  //reads[JsValue](
+  //  path("firstname") >=> name,
+  //  path("lastname") >=> name,
+  //  path("age") >=> int >=> age)
 
   def validateMap = {
     import MapValidation._
